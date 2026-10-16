@@ -15,14 +15,19 @@ ghcr.io/blackboxai-dev/gpu-verified-image:cuda12.4
 
 | Your machine is | Use | Why |
 |---|---|---|
-| a **container** (no post-boot hook) | [the image](#1-the-image) | nothing can run before the workload, so the gate has to be in the image |
-| a **VM or bare metal** (Lambda, your own box) | [the installer](#2-the-installer) | the machine already exists; drop the gate onto it and reload `sshd` |
+| a **container** (no post-boot hook) | [the image](#1-the-image) | nothing can run before the workload, so the gate has to be in the image. Needs Docker and the NVIDIA runtime on the host |
+| a **VM or bare metal** (Lambda, your own box) | [the installer](#2-the-installer) | the machine already exists; drop the gate onto it and reload `sshd`. Needs only root, `sshd` and `curl` |
 
 Both carry the same `gpu-gate` script and behave identically.
 
 ---
 
 ## 1. The image
+
+Needs a host that can run containers with the GPU attached: Docker and the
+NVIDIA Container Toolkit. Many GPU images ship both — Lambda Stack does. If
+`docker: command not found`, either [install them](#installing-docker-and-the-nvidia-runtime)
+or use [the installer](#2-the-installer) instead, which needs neither.
 
 ```sh
 docker run -d --gpus all -p 2222:22 \
@@ -34,7 +39,41 @@ docker run -d --gpus all -p 2222:22 \
 ssh -p 2222 root@localhost
 ```
 
-The image is public; no registry login is needed.
+### Authenticating to the registry
+
+While the package is private, pulling needs a GitHub token with the
+`read:packages` scope ([create one](https://github.com/settings/tokens)):
+
+```sh
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
+With the `gh` CLI already signed in, `gh auth token` supplies it:
+
+```sh
+gh auth token | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
+Once the package is public this step disappears and `docker run` works with
+no credentials at all.
+
+### Installing Docker and the NVIDIA runtime
+
+Only if the host has neither. On Ubuntu:
+
+```sh
+curl -fsSL https://get.docker.com | sudo sh
+
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -fsSL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker
+```
+
+Without `--gpus all` the container still runs; it just has no GPU.
 
 Leave `GPU_VERIFY_URL` and `GPU_RUN_TOKEN` unset and you get an ordinary
 SSH-capable CUDA container with no gate — useful for checking the plumbing
