@@ -13,6 +13,7 @@
 set -uo pipefail
 
 GATE_URL="${GATE_URL:-https://raw.githubusercontent.com/blackboxai-dev/gpu-verified-image/main/gpu-gate}"
+BANNER_URL="${BANNER_URL:-https://raw.githubusercontent.com/blackboxai-dev/gpu-verified-image/main/motd}"
 VERIFY_URL="${GPU_VERIFY_URL:-}"
 RUN_TOKEN="${GPU_RUN_TOKEN:-}"
 FAILMODE="${GPU_FAILMODE:-open}"
@@ -55,6 +56,24 @@ GPU_RUN_TOKEN=$RUN_TOKEN
 GPU_FAILMODE=$FAILMODE
 CONF
 chmod 0644 /etc/gpu-gateway/verify.env
+
+# 2b. the welcome banner, only when asked for. Off by default: branding a
+#     machine someone else is renting is a choice its operator makes, not
+#     something an installer should do on its own. The image ships this file
+#     already, which is why the banner is automatic there and opt-in here.
+case "${GPU_BANNER:-}" in
+  1|true|yes)
+    if [ -f ./motd ]; then
+      install -m 0644 ./motd /etc/gpu-gateway/banner
+      echo "install: banner taken from the working directory"
+    elif curl -fsSL --retry 3 "$BANNER_URL" -o /etc/gpu-gateway/banner; then
+      chmod 0644 /etc/gpu-gateway/banner
+      echo "install: banner downloaded"
+    else
+      echo "install: could not fetch the banner; continuing without one" >&2
+    fi
+    ;;
+esac
 
 # 3. the sshd drop-in that runs it
 install -d -m 0755 /etc/ssh/sshd_config.d

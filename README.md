@@ -142,6 +142,16 @@ Ubuntu's `update-motd.d` scripts and `/etc/legal` are removed, and `pam_motd`
 is disabled, so the banner appears once with nothing above it. Commands,
 `scp` and `sftp` print nothing at all.
 
+On the installer path the banner is **opt-in**, with `GPU_BANNER=1`:
+
+```sh
+sudo GPU_VERIFY_URL="…" GPU_RUN_TOKEN="…" GPU_BANNER=1 ./install.sh
+```
+
+Off by default, because branding a machine someone else is renting is a
+choice its operator makes, not something an installer should do on its own.
+`uninstall.sh` removes the banner along with everything else.
+
 ## Configuration
 
 Both paths read the same four values.

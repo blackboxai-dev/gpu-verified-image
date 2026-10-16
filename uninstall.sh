@@ -40,6 +40,6 @@ if [ "$RELOADED" != "1" ]; then
 fi
 
 # 4. now that no daemon refers to it, the gate itself
-rm -f /usr/local/sbin/gpu-gate /etc/gpu-gateway/verify.env
+rm -f /usr/local/sbin/gpu-gate /etc/gpu-gateway/verify.env /etc/gpu-gateway/banner
 rmdir /etc/gpu-gateway 2>/dev/null || true
 echo "uninstall: gate removed"
