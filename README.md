@@ -86,6 +86,9 @@ curl -fsSL https://raw.githubusercontent.com/blackboxai-dev/gpu-verified-image/m
          bash
 ```
 
+Add `GPU_BANNER=1` to that environment to install the Blackbox welcome banner
+at the same time; without it the machine's own MOTD is left alone.
+
 Or, if you would rather read it first — which you should, before piping
 anything to `sudo bash`:
 
@@ -154,14 +157,21 @@ choice its operator makes, not something an installer should do on its own.
 
 ## Configuration
 
-Both paths read the same four values.
+| Variable | Path | Required | Meaning |
+|---|---|---|---|
+| `GPU_VERIFY_URL` | both | yes | The verification endpoint. |
+| `GPU_RUN_TOKEN` | both | yes | Bearer token for that endpoint, scoped to one machine run. |
+| `GPU_FAILMODE` | both | no | `open` (default) or `closed`. See [Fail policy](#fail-policy). |
+| `PUBLIC_KEY` | image | no | The renter's SSH public key, written to `/root/.ssh/authorized_keys`. Omit it if the host installs keys itself. |
+| `GPU_BANNER` | installer | no | `1` installs the Blackbox welcome banner. Off by default. The image always has it. See [Branding](#branding). |
 
-| Variable | Required | Meaning |
-|---|---|---|
-| `PUBLIC_KEY` | image only | The renter's SSH public key, written to `/root/.ssh/authorized_keys`. Omit it if the host installs keys itself. |
-| `GPU_VERIFY_URL` | yes | The verification endpoint. |
-| `GPU_RUN_TOKEN` | yes | Bearer token for that endpoint, scoped to one machine run. |
-| `GPU_FAILMODE` | no | `open` (default) or `closed`. See [Fail policy](#fail-policy). |
+The image reads its values from the container environment at launch; the
+installer reads them from the environment of the `install.sh` invocation.
+
+Two more exist for mirrors and air-gapped installs, both installer-only and
+rarely needed: `GATE_URL` and `BANNER_URL` override where the gate script and
+the banner are fetched from. If a `gpu-gate` or `motd` file is present in the
+working directory, it is used in preference to either.
 
 No credentials are baked into the image. They arrive at launch.
 
@@ -276,6 +286,19 @@ passively record one. On a VM, the system journal gives you that second
 record; in a container, your verifier's own logs are the record.
 
 ---
+
+## What is in this repository
+
+| File | |
+|---|---|
+| `Dockerfile` | the image |
+| `entrypoint.sh` | PID 1 in the container: installs the key, writes the gate config, starts `sshd` |
+| `gpu-gate` | the gate itself, run by `sshd` as a `ForceCommand`. Shared by both paths |
+| `install.sh` | puts the gate on a machine that already exists |
+| `uninstall.sh` | takes it off again |
+| `motd`, `issue` | the Blackbox welcome banner |
+| `demo-verifier.py` | a minimal verifier for trying it without a backend |
+| `.github/workflows/publish.yml` | build, scan and publish to GHCR |
 
 ## Tags
 
