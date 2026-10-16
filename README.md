@@ -168,6 +168,29 @@ choice its operator makes, not something an installer should do on its own.
 The image reads its values from the container environment at launch; the
 installer reads them from the environment of the `install.sh` invocation.
 
+### What the three required values are
+
+**`GPU_VERIFY_URL`** is the HTTPS endpoint the gate calls to issue and check
+codes. The gate holds no secret and generates nothing itself: it asks this
+endpoint for a code, then asks whether the one typed back is correct. Any
+service implementing the two `POST` steps under
+[The verifier API](#the-verifier-api) works. To try it with nothing to point
+at, run [`demo-verifier.py`](#trying-it-without-a-backend) on the machine and
+use `http://127.0.0.1:8080/verify`.
+
+**`GPU_RUN_TOKEN`** is a bearer token that tells the verifier *which machine*
+is calling. It is not a password you choose — whatever provisioned the
+machine issues it, one per run, and the verifier recognises it. That is how a
+code reaches the right person: the gate sends the fingerprint of the SSH key
+that just authenticated, and the verifier maps it to an owner. Without a
+token the verifier has no idea who is calling and refuses.
+
+**`GPU_FAILMODE`** decides what happens when the verifier **cannot be
+reached** — a timeout, a connection failure, a `5xx`. `open`, the default,
+lets the login through and records it unverified; `closed` refuses it. It
+never applies when the verifier answers and says no: a wrong code is always a
+denial under either setting. See [Fail policy](#fail-policy).
+
 Two more exist for mirrors and air-gapped installs, both installer-only and
 rarely needed: `GATE_URL` and `BANNER_URL` override where the gate script and
 the banner are fetched from. If a `gpu-gate` or `motd` file is present in the
