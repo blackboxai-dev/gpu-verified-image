@@ -277,6 +277,56 @@ default policy waved through every incorrect code.
 
 ---
 
+## Checking it works
+
+Run these after installing either way. They cover every behaviour described
+above, and none of them need a verifier.
+
+On the **image**, with the container published on port 2222:
+
+```sh
+# interactive login: the Blackbox banner, and the code prompt if a verifier
+# is configured
+ssh -p 2222 root@localhost
+
+# the GPU is visible inside the container (the driver is the host's)
+ssh -p 2222 root@localhost 'nvidia-smi --query-gpu=name,driver_version --format=csv'
+
+# a command passes through: no banner, no prompt, nothing but its own output
+ssh -p 2222 root@localhost 'echo clean'
+
+# so does a transfer
+printf 'pwd\nbye\n' | sftp -q -P 2222 root@localhost
+
+# runtime only, by design: none of these exist
+ssh -p 2222 root@localhost 'which nvcc python3 jupyter || echo "none, as intended"'
+
+# provenance: commit, build time, source repository, link to these docs
+docker image inspect ghcr.io/blackboxai-dev/gpu-verified-image:cuda12.4 \
+  --format '{{json .Config.Labels}}' | python3 -m json.tool
+```
+
+On the **installer**, against the host's own `sshd`. Keep your current
+session open while you test, so a mistake cannot lock you out:
+
+```sh
+# the gate is loaded: both lines must appear
+sudo sshd -T | grep -iE '^forcecommand|^exposeauthinfo'
+
+# from a SECOND terminal, a fresh login is challenged
+ssh <user>@<host>
+
+# a command is not
+ssh <user>@<host> 'echo clean'
+
+# the machine keeps whatever toolchain it had; the installer adds only the gate
+ssh <user>@<host> 'which nvcc || echo "no nvcc on this host"'
+```
+
+To see a refusal rather than a pass, point `GPU_VERIFY_URL` at an unreachable
+address with `GPU_FAILMODE=closed`: the login is denied with
+`Login verification is unavailable and this machine is set to fail closed.`
+
 ## The verifier API
 
 The gate is not tied to any particular backend. Implement two `POST` calls at
