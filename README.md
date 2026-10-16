@@ -127,6 +127,21 @@ runcmd:
 
 ---
 
+## Branding
+
+The image prints a Blackbox AI welcome banner on interactive login. It is
+`motd` in this repository, installed to `/etc/motd` and `/etc/gpu-gateway/banner`.
+
+Two paths print it, because neither covers both cases on its own. `sshd`'s
+`PrintMotd` handles a plain shell session but never fires under a
+`ForceCommand`, so with the gate active the gate prints the banner itself,
+from `/etc/gpu-gateway/banner`. Only the image ships that file, so the
+installer path leaves an existing machine's own MOTD alone.
+
+Ubuntu's `update-motd.d` scripts and `/etc/legal` are removed, and `pam_motd`
+is disabled, so the banner appears once with nothing above it. Commands,
+`scp` and `sftp` print nothing at all.
+
 ## Configuration
 
 Both paths read the same four values.

@@ -24,6 +24,25 @@ COPY gpu-gate /usr/local/sbin/gpu-gate
 COPY entrypoint.sh /usr/local/sbin/gpu-entrypoint
 RUN chmod 0755 /usr/local/sbin/gpu-gate /usr/local/sbin/gpu-entrypoint
 
+# Branding.
+#
+# pam_motd prints it, not sshd's PrintMotd. PrintMotd fires only for a plain
+# shell session, and the login gate is a ForceCommand, which sshd treats as a
+# command execution — so with the gate on, PrintMotd prints nothing at all.
+# pam_motd runs when the session opens, before any command, so the banner
+# shows either way. PrintMotd is left off so it is never printed twice.
+#
+# Ubuntu's own update-motd.d scripts are removed: they print the distribution
+# banner above ours, which is the provider branding this replaces.
+COPY motd /etc/motd
+COPY motd /etc/gpu-gateway/banner
+COPY issue /etc/issue
+RUN chmod 0644 /etc/motd /etc/gpu-gateway/banner /etc/issue \
+ && rm -f /etc/update-motd.d/* /etc/legal \
+ && sed -i 's/^\(session .*pam_motd\.so.*\)$/# \1/' /etc/pam.d/sshd \
+ && printf 'PrintMotd yes\n' > /etc/ssh/sshd_config.d/10-motd.conf \
+ && chmod 0644 /etc/ssh/sshd_config.d/10-motd.conf
+
 EXPOSE 22
 ENTRYPOINT ["/usr/local/sbin/gpu-entrypoint"]
 

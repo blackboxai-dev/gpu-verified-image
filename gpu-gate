@@ -26,6 +26,11 @@ CONF=/etc/gpu-gateway/verify.env
 log() { logger -t gpu-gate -- "$*" 2>/dev/null || true; }
 
 login_shell() {
+  # A banner the IMAGE ships. Printed here because sshd's PrintMotd never
+  # fires under a ForceCommand, and read from a path only the image provides,
+  # so the installer path does not print a second banner over the host's own.
+  # Shell sessions only: a command or an sftp transfer never reaches here.
+  [ -r /etc/gpu-gateway/banner ] && cat /etc/gpu-gateway/banner >&2
   SH=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)
   [ -n "$SH" ] || SH=/bin/bash
   exec "$SH" -l
