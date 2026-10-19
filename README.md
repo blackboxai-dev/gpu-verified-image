@@ -323,6 +323,22 @@ ssh <user>@<host> 'echo clean'
 ssh <user>@<host> 'which nvcc || echo "no nvcc on this host"'
 ```
 
+On the **ML image**, everything above plus the toolchain. Run these over SSH
+rather than with `docker exec`: the PATH a login shell gets is not the one
+`docker exec` gets, and that difference has already hidden a bug here once.
+
+```sh
+# the compiler is on the PATH, not merely installed
+ssh -p 2222 root@localhost 'nvcc --version | tail -2'
+
+# both frameworks see the GPU through the container runtime
+ssh -p 2222 root@localhost 'python3 -c "import torch; print(torch.__version__, torch.cuda.is_available())"'
+ssh -p 2222 root@localhost 'python3 -c "import tensorflow as tf; print(len(tf.config.list_physical_devices(\"GPU\")))"'
+
+# notebooks
+ssh -p 2222 root@localhost 'which jupyter-lab'
+```
+
 To see a refusal rather than a pass, point `GPU_VERIFY_URL` at an unreachable
 address with `GPU_FAILMODE=closed`: the login is denied with
 `Login verification is unavailable and this machine is set to fail closed.`
@@ -403,7 +419,8 @@ record; in a container, your verifier's own logs are the record.
 
 | File | |
 |---|---|
-| `Dockerfile` | the image |
+| `Dockerfile` | the slim image |
+| `Dockerfile.ml` | the ML image: the same gate, plus the toolchain |
 | `entrypoint.sh` | PID 1 in the container: installs the key, writes the gate config, starts `sshd` |
 | `gpu-gate` | the gate itself, run by `sshd` as a `ForceCommand`. Shared by both paths |
 | `install.sh` | puts the gate on a machine that already exists |
@@ -435,6 +452,16 @@ One deliberate difference: the ML image resolves its pip packages at build
 time rather than pinning them, so it ships current versions rather than a
 vendor's frozen set. Two rebuilds a month apart will not be identical. The
 slim image has no such packages and stays reproducible.
+
+That has one consequence worth knowing. pip resolves torch to the newest
+build, which currently carries CUDA 13 libraries, while the base image and
+`nvcc` are CUDA 12.4. It works — torch bundles its own CUDA runtime and does
+not use the system one — but the compiler and the framework are on different
+CUDA versions. Install torch from a `cu124` index if you need them to match.
+
+Verified on a live RunPod RTX 3090: torch and TensorFlow both see the GPU,
+`nvcc` reports 12.4, and the gate challenges an interactive login as it does
+on the slim image.
 
 ## Tags
 
