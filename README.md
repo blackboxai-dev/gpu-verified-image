@@ -412,13 +412,38 @@ record; in a container, your verifier's own logs are the record.
 | `demo-verifier.py` | a minimal verifier for trying it without a backend |
 | `.github/workflows/publish.yml` | build, scan and publish to GHCR |
 
+## Two images
+
+The slim image carries the gate and nothing else. The ML image adds the
+toolchain a Lambda Stack machine ships, for a renter who expects to find one.
+
+| | `cuda12.4` | `cuda12.4-ml` |
+|---|---|---|
+| Base | `12.4.1-runtime` | `12.4.1-cudnn-devel` |
+| Size | about 1.5 GB | about 15 GB |
+| Compiler | none | `nvcc`, CUDA headers, cuDNN |
+| Python | none | 3, with pip upgraded first |
+| Frameworks | none | PyTorch, torchvision, torchaudio, TensorFlow |
+| Science stack | none | NumPy, SciPy, pandas, matplotlib, scikit-learn |
+| Notebooks | none | JupyterLab, port 8888 |
+| Login gate | yes | yes, identical |
+
+Reach for the slim one when the workload brings its own image, and the ML one
+when the machine is the workspace.
+
+One deliberate difference: the ML image resolves its pip packages at build
+time rather than pinning them, so it ships current versions rather than a
+vendor's frozen set. Two rebuilds a month apart will not be identical. The
+slim image has no such packages and stays reproducible.
+
 ## Tags
 
 | Tag | |
 |---|---|
-| `cuda12.4` | current build for this CUDA base |
+| `cuda12.4` | current slim build |
 | `latest` | same as above |
-| `<commit sha>` | one exact, immutable build — pin this where reproducibility matters |
+| `cuda12.4-ml`, `ml` | current ML build |
+| `<commit sha>` | one exact, immutable slim build — pin this where reproducibility matters |
 
 Every image carries its commit, build time, source repository and a link to
 these docs in its OCI labels:
