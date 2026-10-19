@@ -184,14 +184,14 @@ Ubuntu's `update-motd.d` scripts and `/etc/legal` are removed, and `pam_motd`
 is disabled, so the banner appears once with nothing above it. Commands,
 `scp` and `sftp` print nothing at all.
 
-On the installer path the banner is **opt-in**, with `GPU_BANNER=1`:
+The installer places the same banner by default, so a machine carrying the
+gate looks the same however the gate got there. To leave a host's own MOTD
+untouched:
 
 ```sh
-sudo GPU_VERIFY_URL="…" GPU_RUN_TOKEN="…" GPU_BANNER=1 ./install.sh
+sudo GPU_VERIFY_URL="…" GPU_RUN_TOKEN="…" GPU_BANNER=0 ./install.sh
 ```
 
-Off by default, because branding a machine someone else is renting is a
-choice its operator makes, not something an installer should do on its own.
 `uninstall.sh` removes the banner along with everything else.
 
 ## Configuration
@@ -202,7 +202,7 @@ choice its operator makes, not something an installer should do on its own.
 | `GPU_RUN_TOKEN` | both | yes | Bearer token for that endpoint, scoped to one machine run. |
 | `GPU_FAILMODE` | both | no | `open` (default) or `closed`. See [Fail policy](#fail-policy). |
 | `PUBLIC_KEY` | image | no | The renter's SSH public key, written to `/root/.ssh/authorized_keys`. Omit it if the host installs keys itself. |
-| `GPU_BANNER` | installer | no | `1` installs the Blackbox welcome banner. Off by default. The image always has it. See [Branding](#branding). |
+| `GPU_BANNER` | installer | no | `0` skips the Blackbox welcome banner. On by default, as it is in the image. See [Branding](#branding). |
 
 The image reads its values from the container environment at launch; the
 installer reads them from the environment of the `install.sh` invocation.

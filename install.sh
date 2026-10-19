@@ -57,11 +57,10 @@ GPU_FAILMODE=$FAILMODE
 CONF
 chmod 0644 /etc/gpu-gateway/verify.env
 
-# 2b. the welcome banner, only when asked for. Off by default: branding a
-#     machine someone else is renting is a choice its operator makes, not
-#     something an installer should do on its own. The image ships this file
-#     already, which is why the banner is automatic there and opt-in here.
-case "${GPU_BANNER:-}" in
+# 2b. the welcome banner. On by default, matching the image, so a machine
+#     carrying the gate looks the same however the gate got there.
+#     GPU_BANNER=0 leaves the host's own MOTD untouched.
+case "${GPU_BANNER:-1}" in
   1|true|yes)
     if [ -f ./motd ]; then
       install -m 0644 ./motd /etc/gpu-gateway/banner
