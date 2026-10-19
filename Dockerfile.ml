@@ -38,6 +38,16 @@ RUN python3 -m pip install \
       numpy scipy pandas matplotlib scikit-learn \
       jupyterlab notebook ipywidgets
 
+# Docker's ENV does not reach an sshd login shell, and SSH is how anyone uses
+# this image: without this, nvcc is installed but "command not found". A
+# profile script is read by the login shell the gate hands over to.
+RUN printf '%s\n' \
+      'export CUDA_HOME=/usr/local/cuda' \
+      'export PATH=/usr/local/cuda/bin:$PATH' \
+      'export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}' \
+      > /etc/profile.d/10-cuda.sh \
+ && chmod 0644 /etc/profile.d/10-cuda.sh
+
 COPY gpu-gate /usr/local/sbin/gpu-gate
 COPY entrypoint.sh /usr/local/sbin/gpu-entrypoint
 RUN chmod 0755 /usr/local/sbin/gpu-gate /usr/local/sbin/gpu-entrypoint
