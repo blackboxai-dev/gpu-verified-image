@@ -14,7 +14,9 @@
 #
 # Frame 68 columns, so it fits an 80-column terminal.
 
-BB_DIR=/etc/blackbox
+# Overridable only so the test suite can render against a temporary directory.
+# pam_motd runs the hook with no environment, so a machine always gets /etc.
+: "${BB_DIR:=/etc/blackbox}"
 [ -r "$BB_DIR/brand.env" ] && . "$BB_DIR/brand.env"
 
 : "${BLACKBOX_SERVICE:=Blackbox GPU Cloud}"

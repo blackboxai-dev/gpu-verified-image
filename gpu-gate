@@ -1,9 +1,19 @@
 #!/bin/sh
-# gpu-gate — the gateway's per-login SSH verification, run as sshd ForceCommand.
+# gpu-gate — reports each interactive SSH login to the gateway, run as sshd
+# ForceCommand.
+#
+# THERE IS NO CODE TO ENTER. This deployment does not challenge logins: the key
+# sshd already authenticated with is the factor, and the gateway's part is to
+# record who that key belongs to. The gate tells the gateway a login opened and
+# hands the session straight on.
+#
+# The prompt loop below is kept for one case only: a gateway still running the
+# version that issues codes. It answers the first call with 202, and then the
+# loop asks. A gateway that answers the allow is never prompted.
 #
 # sshd runs this INSTEAD of the requested command, after authentication, on the
-# session's own terminal — which is why it can prompt (pam_exec cannot). It then
-# either hands control to what the client actually wanted, or refuses.
+# session's own terminal — which is why it CAN prompt when it has to (pam_exec
+# cannot). It then hands control to what the client actually wanted.
 #
 # WHAT GETS CHALLENGED. Anything with a terminal, since a terminal is what can
 # answer a prompt. Everything without one passes through untouched —
@@ -16,7 +26,7 @@
 # bash -i` passed through: an interactive shell, unchallenged and unrecorded.
 #
 # NOT a security boundary: the tenant has sudo and can remove this line from
-# sshd_config. It verifies and records who logs in; it does not confine them.
+# sshd_config. It records who logs in; it does not confine them.
 
 set -u
 CONF=/etc/gpu-gateway/verify.env
@@ -30,7 +40,14 @@ login_shell() {
   # fires under a ForceCommand, and read from a path only the image provides,
   # so the installer path does not print a second banner over the host's own.
   # Shell sessions only: a command or an sftp transfer never reaches here.
-  [ -r /etc/gpu-gateway/banner ] && cat /etc/gpu-gateway/banner >&2
+  # pam_motd never runs under a ForceCommand, so the banner is printed here.
+  # The rendered one first; the old static file is the fallback for a machine
+  # built before branding shipped.
+  if [ -x /etc/blackbox/render-motd.sh ]; then
+    /etc/blackbox/render-motd.sh >&2 2>/dev/null
+  elif [ -r /etc/gpu-gateway/banner ]; then
+    cat /etc/gpu-gateway/banner >&2
+  fi
   SH=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)
   [ -n "$SH" ] || SH=/bin/bash
   exec "$SH" -l
@@ -77,7 +94,7 @@ fi
 
 # ── a terminal is attached: this is what we gate ────────────────────────────
 # Printed before any config read, fingerprint work or network call, so it shows the moment the shell is requested.
-printf '\nVerifying this login. Sending a one-time code...\n' >&2
+printf '\nRecording this login...\n' >&2
 
 # No config file: the fail policy lives in it, so there is none to honour. Allow.
 [ -r "$CONF" ] || { log "no config at $CONF -> allow unverified"; proceed; }
@@ -113,11 +130,22 @@ call() {
   case "$STATUS" in 2*|4*|5*) : ;; *) STATUS="" ;; esac
 }
 
-# ── request a code ──────────────────────────────────────────────────────────
+# ── tell the gateway a login opened ─────────────────────────────────────────
 call "{\"step\":\"request\",\"fingerprint\":\"$(esc "$FP")\",\"osUser\":\"$(esc "$LUSER")\",\"sourceIp\":\"$(esc "$RHOST")\"}"
 if [ -z "$STATUS" ] || [ "${STATUS%%??}" = "5" ]; then
   failmode_exit            # genuinely unreachable
 fi
+# The gateway recorded it and allowed it: no code, no prompt. Checked before
+# the status cases below, because this is the only answer a current gateway
+# gives. Whitespace-insensitive, like the verify check further down: a
+# pretty-printing gateway answers `"verified": true`.
+case "$(printf '%s' "$BODY" | tr -d ' \t\n')" in
+  *'"verified":true'*)
+    log "recorded (user=$LUSER host=$RHOST fp=$FP)"
+    printf 'Logged in.\n' >&2
+    proceed
+    ;;
+esac
 if [ "$STATUS" = "429" ]; then
   # A code was sent moments ago and is still valid (the resend cooldown). Do
   # NOT fail open on this — the code exists, so prompt for it.
