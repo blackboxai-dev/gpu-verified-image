@@ -34,10 +34,15 @@ RUN chmod 0755 /usr/local/sbin/gpu-gate /usr/local/sbin/gpu-entrypoint
 #
 # Ubuntu's own update-motd.d scripts are removed: they print the distribution
 # banner above ours, which is the provider branding this replaces.
+# The banner renderer. The static motd below is the build-time fallback; the
+# entrypoint overwrites /etc/motd with the rendered one, which carries the
+# machine's host, GPU and login beside the mark.
+COPY render-motd.sh /etc/blackbox/render-motd.sh
 COPY motd /etc/motd
 COPY motd /etc/gpu-gateway/banner
 COPY issue /etc/issue
-RUN chmod 0644 /etc/motd /etc/gpu-gateway/banner /etc/issue \
+RUN chmod 0755 /etc/blackbox/render-motd.sh \
+ && chmod 0644 /etc/motd /etc/gpu-gateway/banner /etc/issue \
  && rm -f /etc/update-motd.d/* /etc/legal \
  && sed -i 's/^\(session .*pam_motd\.so.*\)$/# \1/' /etc/pam.d/sshd \
  && printf 'PrintMotd yes\n' > /etc/ssh/sshd_config.d/10-motd.conf \

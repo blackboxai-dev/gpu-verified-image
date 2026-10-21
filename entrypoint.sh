@@ -22,7 +22,28 @@ ForceCommand /usr/local/sbin/gpu-gate
 CONF
 fi
 
-# 3. host keys, if the image was built without them
+# 3. the login banner, rendered from what this launch knows.
+#    The static /etc/motd baked at build time is the fallback; this overwrites
+#    it with the machine's real host, GPU and login. Written to the gate's
+#    banner path too, because pam_motd never fires under a ForceCommand and
+#    the gate prints that file itself.
+mkdir -p /etc/blackbox /etc/gpu-gateway
+cat > /etc/blackbox/brand.env <<BRAND
+BLACKBOX_SERVICE='Blackbox GPU Cloud'
+BLACKBOX_HOST='${BLACKBOX_HOST:-$(hostname 2>/dev/null)}'
+BLACKBOX_GPU='${BLACKBOX_GPU:-}'
+BLACKBOX_LOGIN='${BLACKBOX_LOGIN:-root}'
+BLACKBOX_DOCS='https://docs.blackbox.ai'
+BLACKBOX_SUPPORT='support@blackbox.ai'
+BRAND
+chmod 0644 /etc/blackbox/brand.env
+if [ -x /etc/blackbox/render-motd.sh ]; then
+  /etc/blackbox/render-motd.sh > /etc/motd 2>/dev/null || true
+  cp -f /etc/motd /etc/gpu-gateway/banner 2>/dev/null || true
+  chmod 0644 /etc/motd /etc/gpu-gateway/banner 2>/dev/null || true
+fi
+
+# 4. host keys, if the image was built without them
 [ -f /etc/ssh/ssh_host_ed25519_key ] || ssh-keygen -A >/dev/null 2>&1
 
 # Validate before committing: a bad drop-in must not stop sshd starting at all.
