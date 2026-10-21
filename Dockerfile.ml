@@ -1,9 +1,9 @@
 # Blackbox GPU workload image.
 #
 # A CUDA runtime with sshd and the Blackbox login banner. NO LOGIN GATE: a
-# key holder goes straight in. The gated build - one-time code on every
-# interactive login - is the image_otp branch, published as :cuda12.4-otp
-# and :ml-otp.
+# key holder goes straight in. The gated build - which reports every
+# interactive login to the gateway - is the image_otp branch, published as
+# :cuda12.4-otp and :ml-otp.
 #
 #   docker build -t ghcr.io/blackboxai-dev/gpu-verified-image:cuda12.4-ml -f Dockerfile.ml .
 #
