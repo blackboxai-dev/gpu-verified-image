@@ -1,36 +1,31 @@
-# Verified-login GPU workload image.
+# Blackbox GPU workload image.
 #
-# A CUDA runtime with sshd and a login gate that challenges every interactive
-# SSH session with a one-time code. Built for hosts where the machine is a
-# container and there is no post-boot hook to install the gate with: it is
-# baked in here and wired up by the entrypoint from environment supplied at
-# launch.
+# A CUDA runtime with sshd and the Blackbox login banner. NO LOGIN GATE: a
+# key holder goes straight in. The gated build - one-time code on every
+# interactive login - is the image_otp branch, published as :cuda12.4-otp
+# and :ml-otp.
 #
-#   docker build -t ghcr.io/blackboxai-dev/gpu-verified-image:cuda12.4 .
+#   docker build -t ghcr.io/blackboxai-dev/gpu-verified-image:cuda12.4 -f Dockerfile .
 #
 # The entrypoint reads, from the container environment:
 #   PUBLIC_KEY       the renter's SSH public key
-#   GPU_VERIFY_URL   the verification endpoint
-#   GPU_RUN_TOKEN    the per-run bearer token
-#   GPU_FAILMODE     open | closed
+#   BLACKBOX_HOST    hostname for the banner   (optional)
+#   BLACKBOX_GPU     GPU label for the banner  (optional)
+#   BLACKBOX_LOGIN   login name for the banner (optional)
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssh-server curl ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /var/run/sshd /etc/gpu-gateway /etc/ssh/sshd_config.d
+ && mkdir -p /var/run/sshd /etc/ssh/sshd_config.d
 
-COPY gpu-gate /usr/local/sbin/gpu-gate
 COPY entrypoint.sh /usr/local/sbin/gpu-entrypoint
-RUN chmod 0755 /usr/local/sbin/gpu-gate /usr/local/sbin/gpu-entrypoint
+RUN chmod 0755 /usr/local/sbin/gpu-entrypoint
 
 # Branding.
 #
-# pam_motd prints it, not sshd's PrintMotd. PrintMotd fires only for a plain
-# shell session, and the login gate is a ForceCommand, which sshd treats as a
-# command execution — so with the gate on, PrintMotd prints nothing at all.
-# pam_motd runs when the session opens, before any command, so the banner
-# shows either way. PrintMotd is left off so it is never printed twice.
+# pam_motd prints it when the session opens, before any command, so the banner
+# shows for a shell and for a remote command alike.
 #
 # Ubuntu's own update-motd.d scripts are removed: they print the distribution
 # banner above ours, which is the provider branding this replaces.
@@ -39,10 +34,9 @@ RUN chmod 0755 /usr/local/sbin/gpu-gate /usr/local/sbin/gpu-entrypoint
 # machine's host, GPU and login beside the mark.
 COPY render-motd.sh /etc/blackbox/render-motd.sh
 COPY motd /etc/motd
-COPY motd /etc/gpu-gateway/banner
 COPY issue /etc/issue
 RUN chmod 0755 /etc/blackbox/render-motd.sh \
- && chmod 0644 /etc/motd /etc/gpu-gateway/banner /etc/issue \
+ && chmod 0644 /etc/motd /etc/issue \
  && rm -f /etc/update-motd.d/* /etc/legal \
  && sed -i 's/^\(session .*pam_motd\.so.*\)$/# \1/' /etc/pam.d/sshd \
  && printf 'PrintMotd yes\n' > /etc/ssh/sshd_config.d/10-motd.conf \
@@ -59,7 +53,7 @@ ARG CREATED=""
 ARG VERSION="cuda12.4"
 ARG DOCS_REF="main"
 LABEL org.opencontainers.image.title="Verified-login GPU image" \
-      org.opencontainers.image.description="CUDA 12.4 runtime with sshd and a one-time-code SSH login gate, for GPU hosts that cannot run a post-boot hook." \
+      org.opencontainers.image.description="CUDA 12.4 runtime with sshd and the Blackbox login banner. No login verification; see the image_otp branch for the gated build." \
       org.opencontainers.image.source="https://github.com/blackboxai-dev/gpu-verified-image" \
       org.opencontainers.image.documentation="https://github.com/blackboxai-dev/gpu-verified-image/blob/$DOCS_REF/README.md" \
       org.opencontainers.image.vendor="Blackbox AI" \

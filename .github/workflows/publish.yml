@@ -3,7 +3,7 @@ name: publish
 
 on:
   push:
-    branches: [main]
+    branches: [main, image_otp]
     paths: ["Dockerfile", "Dockerfile.ml", "entrypoint.sh", "gpu-gate", "motd", "issue", ".github/workflows/publish.yml"]
   workflow_dispatch: {}
 
@@ -21,12 +21,26 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Tag suffix per branch, so the two images never overwrite each other.
+      #   main       -> the plain image: cuda12.4, latest, cuda12.4-ml, ml
+      #   image_otp  -> the gated image: the same names with -otp
+      - name: Tag suffix
+        id: tag
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "image_otp" ]; then
+            echo "suffix=-otp" >> "$GITHUB_OUTPUT"
+          else
+            echo "suffix=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Shell scripts parse
         run: |
-          sh -n gpu-gate
+          [ -f gpu-gate ] && sh -n gpu-gate || echo "no gate on this branch"
           sh -n entrypoint.sh
-          bash -n install.sh
-          bash -n uninstall.sh
+          [ -f render-motd.sh ] && sh -n render-motd.sh
+          [ -f install.sh ] && bash -n install.sh
+          [ -f uninstall.sh ] && bash -n uninstall.sh
+          true
 
       - name: Build timestamp
         id: meta
@@ -49,12 +63,12 @@ jobs:
             REVISION=${{ github.sha }}
             CREATED=${{ steps.meta.outputs.created }}
             DOCS_REF=${{ github.sha }}
-          tags: ghcr.io/${{ github.repository_owner }}/gpu-verified-image:cuda12.4
+          tags: ghcr.io/${{ github.repository_owner }}/gpu-verified-image:cuda12.4${{ steps.tag.outputs.suffix }}
 
       - name: Scan (reports HIGH/CRITICAL; does not block)
         uses: aquasecurity/trivy-action@0.35.0
         with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/gpu-verified-image:cuda12.4
+          image-ref: ghcr.io/${{ github.repository_owner }}/gpu-verified-image:cuda12.4${{ steps.tag.outputs.suffix }}
           severity: HIGH,CRITICAL
           exit-code: "0"
           ignore-unfixed: true
@@ -70,14 +84,23 @@ jobs:
             CREATED=${{ steps.meta.outputs.created }}
             DOCS_REF=${{ github.sha }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:cuda12.4
-            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:latest
-            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:cuda12.4${{ steps.tag.outputs.suffix }}
+            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:latest${{ steps.tag.outputs.suffix }}
+            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:${{ github.sha }}${{ steps.tag.outputs.suffix }}
 
   ml:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      - name: Tag suffix
+        id: tag
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "image_otp" ]; then
+            echo "suffix=-otp" >> "$GITHUB_OUTPUT"
+          else
+            echo "suffix=" >> "$GITHUB_OUTPUT"
+          fi
 
       # The ML image lands around 15-20 GB and a runner has roughly 14 GB free
       # on the root disk, where Docker keeps its layers. These four directories
@@ -115,5 +138,5 @@ jobs:
             CREATED=${{ steps.meta.outputs.created }}
             DOCS_REF=${{ github.sha }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:cuda12.4-ml
-            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:ml
+            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:cuda12.4-ml${{ steps.tag.outputs.suffix }}
+            ghcr.io/${{ github.repository_owner }}/gpu-verified-image:ml${{ steps.tag.outputs.suffix }}

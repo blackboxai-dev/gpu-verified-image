@@ -1,7 +1,10 @@
 #!/bin/sh
-# Wire the renter's key and the gateway's login gate, then run sshd in the
-# foreground as PID 1. Everything here is what cloud-init does on the VM
-# providers, compressed into a container start.
+# Wire the renter's key and the login banner, then run sshd in the foreground
+# as PID 1. Everything here is what cloud-init does on the VM providers,
+# compressed into a container start.
+#
+# NO LOGIN VERIFICATION on this branch. The gated build lives on image_otp and
+# publishes as :cuda12.4-otp / :ml-otp; this one lets a key holder straight in.
 set -u
 
 # 1. the renter's key -> root's authorized_keys (RunPod/Vast convention)
@@ -11,23 +14,10 @@ if [ -n "${PUBLIC_KEY:-}" ]; then
   chmod 600 /root/.ssh/authorized_keys
 fi
 
-# 2. the gateway's verify config, when the launch asked for it
-if [ -n "${GPU_VERIFY_URL:-}" ] && [ -n "${GPU_RUN_TOKEN:-}" ]; then
-  printf 'GPU_VERIFY_URL=%s\nGPU_RUN_TOKEN=%s\nGPU_FAILMODE=%s\n' \
-    "$GPU_VERIFY_URL" "$GPU_RUN_TOKEN" "${GPU_FAILMODE:-open}" > /etc/gpu-gateway/verify.env
-  chmod 600 /etc/gpu-gateway/verify.env
-  cat > /etc/ssh/sshd_config.d/60-gpu-gate.conf <<'CONF'
-ExposeAuthInfo yes
-ForceCommand /usr/local/sbin/gpu-gate
-CONF
-fi
-
-# 3. the login banner, rendered from what this launch knows.
+# 2. the login banner, rendered from what this launch knows.
 #    The static /etc/motd baked at build time is the fallback; this overwrites
-#    it with the machine's real host, GPU and login. Written to the gate's
-#    banner path too, because pam_motd never fires under a ForceCommand and
-#    the gate prints that file itself.
-mkdir -p /etc/blackbox /etc/gpu-gateway
+#    it with the machine's real host, GPU and login.
+mkdir -p /etc/blackbox
 cat > /etc/blackbox/brand.env <<BRAND
 BLACKBOX_SERVICE='Blackbox GPU Cloud'
 BLACKBOX_HOST='${BLACKBOX_HOST:-$(hostname 2>/dev/null)}'
@@ -39,17 +29,10 @@ BRAND
 chmod 0644 /etc/blackbox/brand.env
 if [ -x /etc/blackbox/render-motd.sh ]; then
   /etc/blackbox/render-motd.sh > /etc/motd 2>/dev/null || true
-  cp -f /etc/motd /etc/gpu-gateway/banner 2>/dev/null || true
-  chmod 0644 /etc/motd /etc/gpu-gateway/banner 2>/dev/null || true
+  chmod 0644 /etc/motd 2>/dev/null || true
 fi
 
-# 4. host keys, if the image was built without them
+# 3. host keys, if the image was built without them
 [ -f /etc/ssh/ssh_host_ed25519_key ] || ssh-keygen -A >/dev/null 2>&1
-
-# Validate before committing: a bad drop-in must not stop sshd starting at all.
-if ! /usr/sbin/sshd -t 2>/dev/null; then
-  echo "gpu-entrypoint: sshd rejected the gate config; removing it" >&2
-  rm -f /etc/ssh/sshd_config.d/60-gpu-gate.conf
-fi
 
 exec /usr/sbin/sshd -D -e

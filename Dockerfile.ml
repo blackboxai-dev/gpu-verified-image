@@ -1,16 +1,17 @@
-# Verified-login GPU image, ML variant.
+# Blackbox GPU workload image.
 #
-# The slim image (Dockerfile) carries the login gate and nothing else. This one
-# adds the toolchain a Lambda Stack machine ships, so a renter who lands on it
-# finds the tools they expect rather than a bare CUDA runtime.
+# A CUDA runtime with sshd and the Blackbox login banner. NO LOGIN GATE: a
+# key holder goes straight in. The gated build - one-time code on every
+# interactive login - is the image_otp branch, published as :cuda12.4-otp
+# and :ml-otp.
 #
-# Differences from the slim image, all deliberate:
-#   - a cudnn-devel base, so nvcc and the CUDA headers are present
-#   - Python, and pip packages resolved at BUILD time, not pinned to a vendor's
-#     frozen archive. Newer than Lambda ships, and not reproducible across
-#     rebuilds: pin them here if that matters more than being current.
+#   docker build -t ghcr.io/blackboxai-dev/gpu-verified-image:cuda12.4-ml -f Dockerfile.ml .
 #
-#   docker build -f Dockerfile.ml -t gpu-verified-image:ml .
+# The entrypoint reads, from the container environment:
+#   PUBLIC_KEY       the renter's SSH public key
+#   BLACKBOX_HOST    hostname for the banner   (optional)
+#   BLACKBOX_GPU     GPU label for the banner  (optional)
+#   BLACKBOX_LOGIN   login name for the banner (optional)
 FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -23,7 +24,7 @@ RUN apt-get update \
       python3 python3-dev python3-pip python3-venv \
       git build-essential pkg-config \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /var/run/sshd /etc/gpu-gateway /etc/ssh/sshd_config.d
+ && mkdir -p /var/run/sshd /etc/ssh/sshd_config.d
 
 # pip itself first, so the resolver below is the current one.
 RUN python3 -m pip install --upgrade pip setuptools wheel
@@ -48,19 +49,17 @@ RUN printf '%s\n' \
       > /etc/profile.d/10-cuda.sh \
  && chmod 0644 /etc/profile.d/10-cuda.sh
 
-COPY gpu-gate /usr/local/sbin/gpu-gate
 COPY entrypoint.sh /usr/local/sbin/gpu-entrypoint
-RUN chmod 0755 /usr/local/sbin/gpu-gate /usr/local/sbin/gpu-entrypoint
+RUN chmod 0755 /usr/local/sbin/gpu-entrypoint
 
 # The banner renderer. The static motd below is the build-time fallback; the
 # entrypoint overwrites /etc/motd with the rendered one, which carries the
 # machine's host, GPU and login beside the mark.
 COPY render-motd.sh /etc/blackbox/render-motd.sh
 COPY motd /etc/motd
-COPY motd /etc/gpu-gateway/banner
 COPY issue /etc/issue
 RUN chmod 0755 /etc/blackbox/render-motd.sh \
- && chmod 0644 /etc/motd /etc/gpu-gateway/banner /etc/issue \
+ && chmod 0644 /etc/motd /etc/issue \
  && rm -f /etc/update-motd.d/* /etc/legal \
  && printf 'PrintMotd yes\n' > /etc/ssh/sshd_config.d/10-motd.conf \
  && chmod 0644 /etc/ssh/sshd_config.d/10-motd.conf
